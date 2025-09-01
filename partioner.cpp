@@ -19,7 +19,19 @@ int main(int argc, char *argv[]) {
     size_t strLength;
     file.read(reinterpret_cast<char*>(&strLength), sizeof(strLength));
 
-    std::cout << strLength << std::endl;
+    { //Error case 2
+    file.seekg (0, file.end);
+    size_t length = file.tellg();
+    file.seekg (0, file.beg);    
+    std::cout << "Tamaño del archivo (en bytes): " <<length << std::endl;
+
+    if (length < partSize) {
+        std::cout << "El archivo ya es más pequeño que 1MB";
+        return 2;
+    }
+
+    std::cout << "Tamaño del mensaje de los datos dentro del arhivo: " << strLength << std::endl;
+    }
     unsigned long parts = strLength/partSize;  
 
 
@@ -48,7 +60,7 @@ int main(int argc, char *argv[]) {
         filePart.write(buffer, strLength2);
         filePart.close();
 
-        file.seekg(partSize,std::ios_base::cur);
+        file.seekg(partSize, file.cur);
     }
 
     delete[] buffer;

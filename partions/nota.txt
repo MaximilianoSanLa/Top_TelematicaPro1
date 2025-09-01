@@ -1,0 +1,1 @@
+Se necesita tener un folder llamado "partions" que este en el mismo folder donde el archivo compilado del partioner este, para que este sepa donde poner las partes.
