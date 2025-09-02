@@ -26,11 +26,14 @@ int main(int argc, char *argv[]) {
     std::cout << "Tamaño del archivo (en bytes): " <<length << std::endl;
 
     if (length < partSize) {
-        std::cout << "El archivo ya es más pequeño que 1MB";
+        std::cout << "El archivo ya es más pequeño que el tamaño de las partes";
         return 2;
     }
 
     std::cout << "Tamaño del mensaje de los datos dentro del arhivo: " << strLength << std::endl;
+    //test?
+        strLength = length;
+    //test end
     }
     unsigned long parts = strLength/partSize;  
 
