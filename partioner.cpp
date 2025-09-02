@@ -63,7 +63,8 @@ int main(int argc, char *argv[]) {
         filePart.write(buffer, strLength2);
         filePart.close();
 
-        file.seekg(partSize, file.cur);
+        //file.seekg(partSize, file.cur);
+        file.seekg(partSize*(i+1));
     }
 
     delete[] buffer;
