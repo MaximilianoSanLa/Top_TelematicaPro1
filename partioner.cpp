@@ -47,6 +47,14 @@ int main(int argc, char *argv[]) {
         std::string part = ".part";
         folder = folder + argv[1] + part;
     }
+
+
+#else
+    std::string folder = argv[1];
+    {
+        std::string part = ".part";
+        folder = folder + part;
+    }
 #endif // 
 
 
@@ -57,9 +65,8 @@ int main(int argc, char *argv[]) {
         file.read(buffer, partSize);
         buffer[partSize] = '\0';
         std::string num = std::to_string(i);
-#ifdef _linux_
         num= folder + num;
-#endif        
+      
         
         std::cout << num << std::endl;
         
