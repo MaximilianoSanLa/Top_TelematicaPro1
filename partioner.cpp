@@ -2,6 +2,9 @@
 #include <fstream>
 #include <cstring>
 #include <filesystem>
+#ifdef _WIN32
+#include <string>
+#endif
 #define partSize 1000000 //1MB
 
 int main(int argc, char *argv[]) {
@@ -38,12 +41,15 @@ int main(int argc, char *argv[]) {
     unsigned long parts = strLength/partSize;  
 
 
-    
+#ifdef _linux_
     std::string folder = "partions/";
     {
         std::string part = ".part";
         folder = folder + argv[1] + part;
     }
+#endif // 
+
+
 
     
     char* buffer = new char[partSize+1];    
@@ -51,9 +57,9 @@ int main(int argc, char *argv[]) {
         file.read(buffer, partSize);
         buffer[partSize] = '\0';
         std::string num = std::to_string(i);
-        
+#ifdef _linux_
         num= folder + num;
-        
+#endif        
         
         std::cout << num << std::endl;
         
