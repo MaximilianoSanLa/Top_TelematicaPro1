@@ -166,7 +166,12 @@ class DataNodeServicer(pb_grpc.DataNodeServicer):
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, "invalid offset")
 
         remaining = (size - offset) if length == 0 else min(length, size - offset)
+        
+        print(f"[DataNode] 📤 Iniciando envío del bloque {block_id} ({remaining} bytes)")
+        if offset > 0:
+            print(f"[DataNode] 📍 Enviando desde offset {offset}")
 
+        sent_bytes = 0
         with final_path.open("rb") as f:
             f.seek(offset)
             while remaining > 0:
@@ -175,7 +180,15 @@ class DataNodeServicer(pb_grpc.DataNodeServicer):
                 if not data:
                     break
                 remaining -= len(data)
+                sent_bytes += len(data)
+                
+                # Progreso cada 10MB enviados
+                if sent_bytes % (10 * 1024 * 1024) == 0:
+                    print(f"[DataNode] 📤 Enviado {sent_bytes // (1024*1024)} MB del bloque {block_id}")
+                
                 yield pb.DataChunk(data=data)
+        
+        print(f"[DataNode] ✅ ENVÍO COMPLETADO: Bloque {block_id} enviado exitosamente ({sent_bytes} bytes)")
 
     def DeleteBlock(self, request, context):
         _check_auth(context)

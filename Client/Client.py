@@ -163,15 +163,170 @@ def put_file_with_local_blocks(file_path: str, remote_path: str, namenode_addr: 
     print("✅ Subida completada (sin réplicas). Manifest para RegisterFile listo.")
     return logical_manifest
 
+
+def _download_block_from_datanode(dn_addr: str, block_id: str, output_path: Path, auth_token: str | None = None):
+    """
+    Descarga un bloque específico desde un DataNode y lo guarda en output_path.
+    """
+    if auth_token is not None:
+        metadata = [('authorization', f'Bearer {auth_token}')]
+    else:
+        metadata = None
     
+    print(f"🔍 Intentando conectar con DataNode: {dn_addr}")
+    print(f"📥 Buscando bloque {block_id} en DN: {dn_addr}")
+    
+    try:
+        with grpc.insecure_channel(dn_addr) as channel:
+            stub = dnpb_grpc.DataNodeStub(channel)
+            request = dnpb.DownloadBlockRequest(
+                block_id=block_id,
+                offset=0,    # Descargar desde el inicio
+                length=0     # Descargar todo el bloque (0 = completo)
+            )
+            
+            print(f"✅ CONEXIÓN EXITOSA con DataNode: {dn_addr}")
+            print(f"📡 Iniciando descarga del bloque {block_id}...")
+            
+            with output_path.open('wb') as f:
+                total_downloaded = 0
+                for chunk in stub.DownloadBlock(request, metadata=metadata):
+                    data = chunk.data
+                    if data:
+                        f.write(data)
+                        total_downloaded += len(data)
+                        
+                        # Progreso cada 10MB
+                        if total_downloaded % (10 * 1024 * 1024) == 0:
+                            print(f"📥 Descargado {total_downloaded // (1024*1024)} MB del bloque {block_id} desde {dn_addr}")
+            
+            print(f"🎉 DESCARGA EXITOSA desde {dn_addr}: Bloque {block_id} ({total_downloaded} bytes) → {output_path}")
+            return total_downloaded
+            
+    except grpc.RpcError as e:
+        print(f"❌ ERROR DE CONEXIÓN con DataNode {dn_addr}: {e}")
+        print(f"❌ No se pudo obtener el bloque {block_id} desde {dn_addr}")
+        # Limpiar archivo parcial si existe
+        if output_path.exists():
+            output_path.unlink()
+        raise
+    except Exception as e:
+        print(f"❌ ERROR INESPERADO conectando a {dn_addr}: {e}")
+        # Limpiar archivo parcial si existe
+        if output_path.exists():
+            output_path.unlink()
+        raise
+
+
+def download_block(dn_addr: str, block_id: str, out_path: str,
+                   offset: int = 0, length: int = 0, auth_token: str | None = None) -> int:
+    """
+    Descarga un bloque completo (o un rango) desde un DataNode y lo guarda en disco.
+    Devuelve los bytes escritos.
+    """
+    metadata = [('authorization', f'Bearer {auth_token}')] if auth_token else None
+    written = 0
+    out = Path(out_path)
+    with grpc.insecure_channel(dn_addr) as channel:
+        stub = dnpb_grpc.DataNodeStub(channel)
+        stream = stub.DownloadBlock(
+            dnpb.DownloadBlockRequest(block_id=block_id, offset=offset, length=length),
+            metadata=metadata
+        )
+        with out.open('wb') as f:
+            for chunk in stream:          # server-streaming de DataChunk{ bytes data }
+                f.write(chunk.data)
+                written += len(chunk.data)
+    return written
 
 
 if __name__ == "__main__":
-    # Ejemplo de uso:
-    mf = put_file_with_local_blocks(
-        file_path="Archivo128MB.txt",
-        remote_path="/users/camilo/Archivo128MB.txt",
-        namenode_addr="localhost:50051",
-        auth_token=None  # o tu token
-    )
-    print(json.dumps(mf, indent=2))
+    import sys
+    
+    if len(sys.argv) > 1 and sys.argv[1] == "download":
+        # Modo descarga
+        print("🔽 Modo DESCARGA")
+        
+        # Ejemplo: python Client.py download Archivo128MBOut/manifest.json archivo_descargado.txt
+        if len(sys.argv) >= 4:
+            manifest_path = sys.argv[2]
+            output_file = sys.argv[3]
+        else:
+            manifest_path = "Archivo128MBOut/manifest.json"
+            output_file = "archivo_descargado.txt"
+        
+        try:
+            with open(manifest_path, "r") as f:
+                manifest = json.load(f)
+            
+            # Crear carpeta para bloques descargados
+            download_blocks_dir = Path("DownloadedBlocks")
+            download_blocks_dir.mkdir(exist_ok=True)
+            print(f"📁 Creando directorio de bloques: {download_blocks_dir}")
+            
+            # Lista de DataNodes disponibles
+            dataNodes = ["localhost:5002", "localhost:5003", "localhost:5004"]
+            downloaded_blocks = []
+            
+            # Procesar cada bloque del manifest
+            for block_info in manifest["blocks"]:
+                block_id = block_info["id"]
+                block_index = int(block_info["index"])
+                expected_size = int(block_info["size"])
+                
+                # Seleccionar DataNode (por ahora usar el índice para rotar entre DataNodes)
+                datanode_idx = block_index % len(dataNodes)
+                dn_addr = dataNodes[datanode_idx]
+                
+                # Crear archivo .block individual
+                block_filename = f"block_{block_index:06d}_{block_id[:8]}.block"
+                block_path = download_blocks_dir / block_filename
+                
+                print(f"\n🔽 Descargando bloque {block_index} desde {dn_addr}")
+                print(f"   📦 ID: {block_id}")
+                print(f"   📏 Tamaño esperado: {expected_size} bytes")
+                
+                result = download_block(
+                    dn_addr=dn_addr,
+                    block_id=block_id,
+                    out_path=str(block_path),
+                    auth_token=None
+                )
+                
+                # Verificar tamaño descargado
+                if result != expected_size:
+                    print(f"⚠️ Advertencia: Tamaño descargado {result} != esperado {expected_size}")
+                
+                downloaded_blocks.append((block_index, block_path, result))
+                print(f"✅ Bloque guardado: {block_path} ({result} bytes)")
+            
+            # Crear archivo final concatenado
+            print(f"\n🔗 Concatenando bloques en archivo final: {output_file}")
+            with open(output_file, "wb") as final_file:
+                total_bytes = 0
+                for block_index, block_path, size in sorted(downloaded_blocks):
+                    with open(block_path, "rb") as block_file:
+                        data = block_file.read()
+                        final_file.write(data)
+                        total_bytes += len(data)
+                        print(f"✅ Bloque {block_index} concatenado: {len(data)} bytes")
+            
+            print(f"\n🎉 Descarga completada:")
+            print(f"   📄 Archivo final: {output_file} ({total_bytes} bytes)")
+            print(f"   📁 Bloques individuales en: {download_blocks_dir}/")
+            for block_index, block_path, size in sorted(downloaded_blocks):
+                print(f"      📦 {block_path.name} ({size} bytes)")
+                
+        except Exception as e:
+            print(f"❌ Error en descarga: {e}")
+    
+    else:
+        # Modo subida (por defecto)
+        print("🔼 Modo SUBIDA")
+        mf = put_file_with_local_blocks(
+            file_path="Archivo128MB.txt",
+            remote_path="/users/camilo/Archivo128MB.txt",
+            namenode_addr="localhost:50051",
+            auth_token=None  # o tu token
+        )
+        print(json.dumps(mf, indent=2))
