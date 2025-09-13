@@ -1,0 +1,69 @@
+// ======================================================
+// GridDFS - NameNode API (proto3)
+// Define el contrato entre Cliente <-> NameNode
+// para planificar la escritura de un archivo.
+// ======================================================
+syntax = "proto3";
+
+// Agrupa mensajes/servicios y evita colisiones de nombres.
+package griddfs;
+
+// ============================
+// Servicio del NameNode
+// ============================
+// Expone RPCs (métodos remotos) que los clientes pueden invocar.
+service NameNode {
+  // Planifica la escritura de un archivo:
+  // - El cliente envía: nombre de archivo y tamaño total en bytes.
+  // - El NameNode responde: tamaño de bloque, número de bloques y
+  //   asignación de DataNodes por cada bloque (para replicación/colocación).
+  rpc PlanFileWrite(PlanFileWriteRequest) returns (PlanFileWriteResponse) {}
+}
+
+// ============================
+// Mensajes (estructuras de datos)
+// ============================
+
+// Solicitud del cliente para planificar la escritura.
+// El cliente calcula file_size localmente leyendo su archivo.
+message PlanFileWriteRequest {
+  // Nombre del archivo (ej: "video.mp4")
+  string file_name = 1;
+
+  // Tamaño total del archivo en bytes.
+  // Ej: 180_000_000 para ~171.66 MB
+  uint64 file_size = 2;
+}
+
+// Representa la asignación de un bloque concreto.
+// El NameNode indica dónde (en qué DataNodes) debe guardarse el bloque.
+message BlockAssignment {
+  // Índice (orden) del bloque dentro del archivo (0, 1, 2, ...).
+  uint64 block_index = 1;
+
+  // Lista de DataNodes a los que el cliente debe enviar este bloque.
+  // Formato sugerido: "host:port" (ej: "dn1.local:5000").
+  // Puede haber varios para soportar replicación (ej: 2 o 3 copias).
+  repeated string datanodes = 2;
+}
+
+// Respuesta del NameNode con el plan de escritura.
+message PlanFileWriteResponse {
+  // Tamaño de bloque en bytes (regla del sistema).
+  // Típico: 64 * 1024 * 1024 = 64 MB.
+  uint64 block_size = 1;
+
+  // Número total de bloques necesarios para almacenar file_size
+  // usando block_size. Se calcula como ceil(file_size / block_size).
+  uint64 num_blocks = 2;
+
+  // Asignación por bloque: para cada índice de bloque,
+  // el NameNode devuelve a qué DataNodes enviarlo.
+  // La longitud de 'assignments' debería ser igual a num_blocks.
+  repeated BlockAssignment assignments = 3;
+
+  // (Opcional) Factor de replicación recomendado (ej: 3).
+  // Si lo usas, asegúrate de que cada BlockAssignment tenga
+  // 'replication' entradas en 'datanodes'.
+  // uint32 replication = 4;
+}

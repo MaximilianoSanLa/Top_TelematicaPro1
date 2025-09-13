@@ -1,0 +1,85 @@
+// ===========================================
+// DataNode API (gRPC, proto3)
+// Guarda/lee BLOQUES (bytes), no nombres.
+// ===========================================
+syntax = "proto3";
+package griddfs;
+
+// Servicio expuesto por cada DataNode (cada máquina/worker).
+service DataNode {
+  // SUBIR un bloque (cliente → servidor) en streaming.
+  // Primer mensaje: START; luego muchos CHUNK; al final COMMIT.
+  rpc UploadBlock(stream UploadBlockRequest) returns (UploadBlockResult) {}
+
+  // DESCARGAR un bloque (servidor → cliente) en streaming.
+  // Permite rangos (offset/length) para reintentos/reanudación.
+  rpc DownloadBlock(DownloadBlockRequest) returns (stream DataChunk) {}
+
+  // (Opcional) Borrar un bloque específico en este DataNode.
+  rpc DeleteBlock(DeleteBlockRequest) returns (Ack) {}
+
+  // (Opcional) Health check simple.
+  rpc Health(HealthRequest) returns (HealthResponse) {}
+}
+
+// Mensaje de subida con "oneof" para tres fases del flujo.
+message UploadBlockRequest {
+  oneof msg {
+    UploadBlockStart   start  = 1;  // primer mensaje del stream
+    DataChunk          chunk  = 2;  // 0..N mensajes con datos
+    UploadBlockCommit  commit = 3;  // último mensaje del stream
+  }
+}
+
+// Inicio de subida: identifica el bloque y (opcional) reserva tamaño.
+message UploadBlockStart {
+  string block_id     = 1;        // UUID del bloque (mismo para réplicas)
+  uint64 expected_size= 2;        // bytes esperados del bloque (opcional aquí)
+  string sha256       = 3;        // hash del bloque (opcional aquí)
+}
+
+// Trozos de datos (no mayores al chunk_size que use tu cliente).
+message DataChunk {
+  bytes data = 1;
+}
+
+// Cierre de subida: el DataNode debe verificar tamaño/hash y "finalizar".
+message UploadBlockCommit {
+  uint64 expected_size = 1;       // tamaño total escrito que el cliente espera
+  string sha256        = 2;       // hash del bloque
+  bool   finalize      = 3;       // true -> renombrar .part -> .blk
+}
+
+// Resultado final de la subida.
+message UploadBlockResult {
+  bool   ok          = 1;
+  string error       = 2;
+  uint64 stored_size = 3;         // bytes realmente guardados
+  string block_path  = 4;         // ruta local (útil para logging)
+}
+
+// Petición de descarga (permite rangos; length=0 => hasta EOF).
+message DownloadBlockRequest {
+  string block_id = 1;
+  uint64 offset   = 2;
+  uint64 length   = 3;
+}
+
+// Borrado puntual de un bloque.
+message DeleteBlockRequest {
+  string block_id = 1;
+}
+
+// Healthcheck simple.
+message HealthRequest {}
+message HealthResponse {
+  bool   ok       = 1;
+  string node     = 2;  // hostname/id
+  string version  = 3;
+}
+
+// ACK genérico por si lo necesitas en otros RPCs.
+message Ack {
+  bool   ok    = 1;
+  string error = 2;
+}
