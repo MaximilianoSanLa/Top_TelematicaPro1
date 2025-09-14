@@ -8,7 +8,7 @@ import hashlib
 import uuid
 from pathlib import Path
 import grpc
-
+import requests
 import name_node_pb2 as pb
 import name_node_pb2_grpc as pb_grpc
 import data_node_pb2 as dnpb
@@ -242,91 +242,150 @@ def download_block(dn_addr: str, block_id: str, out_path: str,
 
 if __name__ == "__main__":
     import sys
-    
-    if len(sys.argv) > 1 and sys.argv[1] == "download":
-        # Modo descarga
-        print("🔽 Modo DESCARGA")
+    BASE_URL = "http://44.217.41.36:3000"
+    while True:
+        print("Ingresa 1 para ingresar a tu cuenta.\n Ingresa 2 para crear cuenta")
         
-        # Ejemplo: python Client.py download Archivo128MBOut/manifest.json archivo_descargado.txt
-        if len(sys.argv) >= 4:
-            manifest_path = sys.argv[2]
-            output_file = sys.argv[3]
+        if(input()=="1"):
+            print("Ingresa Usuario: ")
+            user= input()
+            print("Ingresa Contrasena: ")
+            contrasena= input()
+            payload = {
+                "username": user,
+                "password": contrasena
+            }
+            response = requests.post(f"{BASE_URL}/login", json=payload)
+            if response.status_code == 200:
+                data = response.json()
+                print("Login successful!")
+                print("Auth Key:", data["authKey"])
+            else:
+                print("Login failed:", response.status_code, response.text)
+                break
         else:
-            manifest_path = "Archivo128MBOut/manifest.json"
-            output_file = "archivo_descargado.txt"
-        
-        try:
-            with open(manifest_path, "r") as f:
-                manifest = json.load(f)
-            
-            # Crear carpeta para bloques descargados
-            download_blocks_dir = Path("DownloadedBlocks")
-            download_blocks_dir.mkdir(exist_ok=True)
-            print(f"📁 Creando directorio de bloques: {download_blocks_dir}")
-            
-            # Lista de DataNodes disponibles
-            dataNodes = ["localhost:5002", "localhost:5003", "localhost:5004"]
-            downloaded_blocks = []
-            
-            # Procesar cada bloque del manifest
-            for block_info in manifest["blocks"]:
-                block_id = block_info["id"]
-                block_index = int(block_info["index"])
-                expected_size = int(block_info["size"])
+            print("Ingresa Usuario: ")
+            user= input()
+            print("Ingresa Contrasena: ")
+            contrasena= input()
+            payload = {
+                "superKey": "my-secret-superuser-key",
+                "username": user,
+                "password": contrasena
+            }
+            response = requests.post(f"{BASE_URL}/login", json=payload)
+        elecion= input("Utilize nuestra api: get 'Archivo', put 'Archivo', ls, mkdir 'Nombre',rm 'Archivo' ")
+        eleciones = elecion.split(" ")
+        authKey = response.json()["authKey"]
+        print("🔑 AuthKey:", authKey)
+        cmd_payload = {
+            "authKey": authKey,
+            "cmd": "ls"   # list files
+        }
+
+        print(eleciones[0])
+        if eleciones[0] == "get":
+            # Modo descarga
+            print("🔽 Modo DESCARGA")
+
+            # Ejemplo: python Client.py download Archivo128MBOut/manifest.json archivo_descargado.txt
+            if len(sys.argv) >= 4:
+                manifest_path = sys.argv[2]
+                output_file = sys.argv[3]
+            else:
+                manifest_path = "Archivo128MBOut/manifest.json"
+                output_file = "archivo_descargado.txt"
+            output_file=eleciones[1]
+
+            try:
+                with open(manifest_path, "r") as f:
+                    manifest = json.load(f)
+
+                # Crear carpeta para bloques descargados
+                download_blocks_dir = Path("DownloadedBlocks")
+                download_blocks_dir.mkdir(exist_ok=True)
+                print(f"📁 Creando directorio de bloques: {download_blocks_dir}")
+                cmd_res = requests.post(f"{BASE_URL}/command", json=cmd_payload)
+
+                results = data.get("results", [])
+                #dataNodes = ["localhost:5002", "localhost:5003", "localhost:5004"]
+                dataNodes = [f"{r['worker']}:5002" for r in results if "worker" in r]
+
+                # Remove duplicates
+                dataNodes = list(set(dataNodes))
+                # Lista de DataNodes disponibles
                 
-                # Seleccionar DataNode (por ahora usar el índice para rotar entre DataNodes)
-                datanode_idx = block_index % len(dataNodes)
-                dn_addr = dataNodes[datanode_idx]
-                
-                # Crear archivo .block individual
-                block_filename = f"block_{block_index:06d}_{block_id[:8]}.block"
-                block_path = download_blocks_dir / block_filename
-                
-                print(f"Descargando bloque {block_index} desde {dn_addr}")
-                print(f" ID: {block_id}")
-                print(f" Tamaño esperado: {expected_size} bytes")
-                
-                result = download_block(
-                    dn_addr=dn_addr,
-                    block_id=block_id,
-                    out_path=str(block_path),
-                    auth_token=None
-                )
-                
-                # Verificar tamaño descargado
-                if result != expected_size:
-                    print(f"Advertencia: Tamaño descargado {result} != esperado {expected_size}")
-                
-                downloaded_blocks.append((block_index, block_path, result))
-                print(f"Bloque guardado: {block_path} ({result} bytes)")
-            
-            # Crear archivo final concatenado
-            print(f" Concatenando bloques en archivo final: {output_file}")
-            with open(output_file, "wb") as final_file:
-                total_bytes = 0
+                downloaded_blocks = []
+
+                # Procesar cada bloque del manifest
+                for block_info in manifest["blocks"]:
+                    block_id = block_info["id"]
+                    block_index = int(block_info["index"])
+                    expected_size = int(block_info["size"])
+
+                    # Seleccionar DataNode (por ahora usar el índice para rotar entre DataNodes)
+                    datanode_idx = block_index % len(dataNodes)
+                    dn_addr = dataNodes[datanode_idx]
+
+                    # Crear archivo .block individual
+                    block_filename = f"block_{block_index:06d}_{block_id[:8]}.block"
+                    block_path = download_blocks_dir / block_filename
+
+                    print(f"\n🔽 Descargando bloque {block_index} desde {dn_addr}")
+                    print(f"   📦 ID: {block_id}")
+                    print(f"   📏 Tamaño esperado: {expected_size} bytes")
+
+                    result = download_block(
+                        dn_addr=dn_addr,
+                        block_id=block_id,
+                        out_path=str(block_path),
+                        auth_token=None
+                    )
+
+                    # Verificar tamaño descargado
+                    if result != expected_size:
+                        print(f"⚠️ Advertencia: Tamaño descargado {result} != esperado {expected_size}")
+
+                    downloaded_blocks.append((block_index, block_path, result))
+                    print(f"✅ Bloque guardado: {block_path} ({result} bytes)")
+
+                # Crear archivo final concatenado
+                print(f"\n🔗 Concatenando bloques en archivo final: {output_file}")
+                with open(output_file, "wb") as final_file:
+                    total_bytes = 0
+                    for block_index, block_path, size in sorted(downloaded_blocks):
+                        with open(block_path, "rb") as block_file:
+                            data = block_file.read()
+                            final_file.write(data)
+                            total_bytes += len(data)
+                            print(f"✅ Bloque {block_index} concatenado: {len(data)} bytes")
+
+                print(f"\n🎉 Descarga completada:")
+                print(f"   📄 Archivo final: {output_file} ({total_bytes} bytes)")
+                print(f"   📁 Bloques individuales en: {download_blocks_dir}/")
                 for block_index, block_path, size in sorted(downloaded_blocks):
-                    with open(block_path, "rb") as block_file:
-                        data = block_file.read()
-                        final_file.write(data)
-                        total_bytes += len(data)
-                        print(f" Bloque {block_index} concatenado: {len(data)} bytes")
-            
-            print(f"Descarga completada:")
-            print(f"Archivo final: {output_file} ({total_bytes} bytes)")
-            print(f"Bloques individuales en: {download_blocks_dir}/")
-            for block_index, block_path, size in sorted(downloaded_blocks):
-                print(f"{block_path.name} ({size} bytes)")
-                
-        except Exception as e:
-            print(f"Error en descarga: {e}")
-    
-    else:
-        # Modo subida (por defecto)
-        print("🔼 Modo SUBIDA")
-        mf = put_file_with_local_blocks(
-            file_path="Archivo128MB.txt",
-            remote_path="/users/camilo/Archivo128MB.txt",
-            namenode_addr="localhost:50051",
-            auth_token=None  # o tu token
-        )
-        print(json.dumps(mf, indent=2))
+                    print(f"      📦 {block_path.name} ({size} bytes)")
+
+            except Exception as e:
+                print(f"❌ Error en descarga: {e}")
+
+        elif eleciones[0]=="put":
+            # Modo subida (por defecto)
+            print("🔼 Modo SUBIDA")
+            mf = put_file_with_local_blocks(
+                file_path=eleciones[1],
+                remote_path="Archivo128MB.txt",
+                namenode_addr="44.217.41.36:50051",
+                auth_token=None  # o tu token
+            )
+            print(json.dumps(mf, indent=2))
+        elif eleciones[0]=="ls":
+            cmd_res = requests.post(f"{BASE_URL}/command", json=cmd_payload)
+            data = cmd_res.json()
+            if cmd_res.status_code == 200:
+                print("📂 Command:", data["cmd"])
+                print("📜 Results:")
+                for result in data["results"]:
+                    print(result)
+            else:
+                print("❌ Command failed:", cmd_res.text)
