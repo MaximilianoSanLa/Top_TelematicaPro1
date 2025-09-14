@@ -282,9 +282,9 @@ if __name__ == "__main__":
                 block_filename = f"block_{block_index:06d}_{block_id[:8]}.block"
                 block_path = download_blocks_dir / block_filename
                 
-                print(f"\n🔽 Descargando bloque {block_index} desde {dn_addr}")
-                print(f"   📦 ID: {block_id}")
-                print(f"   📏 Tamaño esperado: {expected_size} bytes")
+                print(f"Descargando bloque {block_index} desde {dn_addr}")
+                print(f" ID: {block_id}")
+                print(f" Tamaño esperado: {expected_size} bytes")
                 
                 result = download_block(
                     dn_addr=dn_addr,
@@ -295,13 +295,13 @@ if __name__ == "__main__":
                 
                 # Verificar tamaño descargado
                 if result != expected_size:
-                    print(f"⚠️ Advertencia: Tamaño descargado {result} != esperado {expected_size}")
+                    print(f"Advertencia: Tamaño descargado {result} != esperado {expected_size}")
                 
                 downloaded_blocks.append((block_index, block_path, result))
-                print(f"✅ Bloque guardado: {block_path} ({result} bytes)")
+                print(f"Bloque guardado: {block_path} ({result} bytes)")
             
             # Crear archivo final concatenado
-            print(f"\n🔗 Concatenando bloques en archivo final: {output_file}")
+            print(f" Concatenando bloques en archivo final: {output_file}")
             with open(output_file, "wb") as final_file:
                 total_bytes = 0
                 for block_index, block_path, size in sorted(downloaded_blocks):
@@ -309,16 +309,16 @@ if __name__ == "__main__":
                         data = block_file.read()
                         final_file.write(data)
                         total_bytes += len(data)
-                        print(f"✅ Bloque {block_index} concatenado: {len(data)} bytes")
+                        print(f" Bloque {block_index} concatenado: {len(data)} bytes")
             
-            print(f"\n🎉 Descarga completada:")
-            print(f"   📄 Archivo final: {output_file} ({total_bytes} bytes)")
-            print(f"   📁 Bloques individuales en: {download_blocks_dir}/")
+            print(f"Descarga completada:")
+            print(f"Archivo final: {output_file} ({total_bytes} bytes)")
+            print(f"Bloques individuales en: {download_blocks_dir}/")
             for block_index, block_path, size in sorted(downloaded_blocks):
-                print(f"      📦 {block_path.name} ({size} bytes)")
+                print(f"{block_path.name} ({size} bytes)")
                 
         except Exception as e:
-            print(f"❌ Error en descarga: {e}")
+            print(f"Error en descarga: {e}")
     
     else:
         # Modo subida (por defecto)
