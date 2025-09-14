@@ -10,8 +10,8 @@ import name_node_pb2_grpc as pb_grpc
 BLOCK_SIZE = 64 * 1024 * 1024        # 64 MB                     # número de réplicas por bloque
 DATANODES = [                        # DataNodes disponibles (host:port)
     "localhost:5002",
-    "localhost:5003",
-    "localhost:5004",
+    "localhost:5002",
+    "localhost:5002",
 ]
 class NameNodeServicer(pb_grpc.NameNodeServicer):
     def PlanFileWrite(self, request:pb.PlanFileWriteRequest, context):

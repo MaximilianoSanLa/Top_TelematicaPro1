@@ -28,6 +28,7 @@ message UploadBlockRequest {
     UploadBlockStart   start  = 1;  // primer mensaje del stream
     DataChunk          chunk  = 2;  // 0..N mensajes con datos
     UploadBlockCommit  commit = 3;  // último mensaje del stream
+    string file_name = 4; 
   }
 }
 
@@ -36,6 +37,7 @@ message UploadBlockStart {
   string block_id     = 1;        // UUID del bloque (mismo para réplicas)
   uint64 expected_size= 2;        // bytes esperados del bloque (opcional aquí)
   string sha256       = 3;        // hash del bloque (opcional aquí)
+  string file_name    = 4;   
 }
 
 // Trozos de datos (no mayores al chunk_size que use tu cliente).

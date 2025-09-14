@@ -1,4 +1,4 @@
-from utilsClient import dividir_bloque, limpiar_archivos_temporales, limpiar_todo
+from utilsClient import dividir_bloque
 import argparse
 import json
 import os
@@ -45,7 +45,8 @@ def file_sha256(path:Path)->str:
                 break
             h.update(data)
     return h.hexdigest()
-def _upload_block_to_one_datanode(dn_addr: str, block_id: str, block_path: Path, expected_size: int, sha256: str, auth_token=None):
+def _upload_block_to_one_datanode(dn_addr: str, block_id: str, block_path: Path, expected_size: int, sha256: str, file_name: str, auth_token=None):
+    print(f"DEBUG: file_name = {file_name}")
     block_path=Path(block_path)
     if auth_token is not None:
         metadata = [('authorization', f'Bearer {auth_token}')] 
@@ -59,7 +60,8 @@ def _upload_block_to_one_datanode(dn_addr: str, block_id: str, block_path: Path,
                 start=dnpb.UploadBlockStart(
                     block_id=block_id,
                     expected_size=expected_size,   
-                    sha256=""                     
+                    sha256="",
+                    file_name=file_name  # ✅ AGREGAR ESTA LÍNEA
                 )
             )
             print("DEBUG: START message enviado")
@@ -117,6 +119,9 @@ def put_file_with_local_blocks(file_path: str, remote_path: str, namenode_addr: 
     manifest_path = dividir_bloque(file_path, block_size)#Genera el manifest
     manifest = json.loads(Path(manifest_path).read_text(encoding='utf-8'))#Contiene la informacion de los bloques 
 
+    # ✅ AGREGAR ESTA LÍNEA
+    file_name = Path(file_path).name
+
     # Validación simple
     if len(manifest["blocks"]) != num_blocks_plan:
         print(f"⚠️ Aviso: manifest tiene {len(manifest['blocks'])} bloques, plan esperaba {num_blocks_plan}. (Último bloque puede ajustar)")
@@ -143,7 +148,7 @@ def put_file_with_local_blocks(file_path: str, remote_path: str, namenode_addr: 
         print(f"DEBUG: dn_addr = '{dn_addr}', type = {type(dn_addr)}")
 
         print(f"⬆️  Subiendo bloque {order} ({size} B) → DN: {dn_addr}")
-        _upload_block_to_one_datanode(dn_addr, id, path, size, hash, auth_token)
+        _upload_block_to_one_datanode(dn_addr, id, path, size, hash, file_name, auth_token)
 
         blocks_for_register.append({
             "order": order,
@@ -255,14 +260,14 @@ if __name__ == "__main__":
                 "username": user,
                 "password": contrasena
             }
-            response = requests.post(f"{BASE_URL}/login", json=payload)
-            if response.status_code == 200:
-                data = response.json()
-                print("Login successful!")
-                print("Auth Key:", data["authKey"])
-            else:
-                print("Login failed:", response.status_code, response.text)
-                break
+           # response = requests.post(f"{BASE_URL}/login", json=payload)
+            #if response.status_code == 200:
+             #   data = response.json()
+              #  print("Login successful!")
+               # print("Auth Key:", data["authKey"])
+            #else:
+             #   print("Login failed:", response.status_code, response.text)
+               # break 
         else:
             print("Ingresa Usuario: ")
             user= input()
@@ -276,12 +281,12 @@ if __name__ == "__main__":
             response = requests.post(f"{BASE_URL}/login", json=payload)
         elecion= input("Utilize nuestra api: get 'Archivo', put 'Archivo', ls, mkdir 'Nombre',rm 'Archivo' ")
         eleciones = elecion.split(" ")
-        authKey = response.json()["authKey"]
-        print("🔑 AuthKey:", authKey)
-        cmd_payload = {
-            "authKey": authKey,
-            "cmd": "ls"   # list files
-        }
+        #authKey = response.json()["authKey"]
+        #print("🔑 AuthKey:", authKey)
+        #cmd_payload = {
+           # "authKey": authKey,
+            #"cmd": "ls"   # list files
+        #}
 
         print(eleciones[0])
         if eleciones[0] == "get":
@@ -308,8 +313,8 @@ if __name__ == "__main__":
                 cmd_res = requests.post(f"{BASE_URL}/command", json=cmd_payload)
 
                 results = data.get("results", [])
-                #dataNodes = ["localhost:5002", "localhost:5003", "localhost:5004"]
-                dataNodes = [f"{r['worker']}:5002" for r in results if "worker" in r]
+                dataNodes = ["localhost:5002", "localhost:5002", "localhost:5002"]
+                #dataNodes = [f"{r['worker']}:5002" for r in results if "worker" in r]
 
                 # Remove duplicates
                 dataNodes = list(set(dataNodes))
@@ -375,7 +380,8 @@ if __name__ == "__main__":
             mf = put_file_with_local_blocks(
                 file_path=eleciones[1],
                 remote_path="Archivo128MB.txt",
-                namenode_addr="44.217.41.36:50051",
+                namenode_addr="localhost:50051",
+                #namenode_addr="44.217.41.36:50051",
                 auth_token=None  # o tu token
             )
             print(json.dumps(mf, indent=2))

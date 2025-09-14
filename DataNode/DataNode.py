@@ -18,6 +18,16 @@ READ_CHUNK = 1 * 1024 * 1024  # 1 MB para servir descargas
 # Opcional: token mínimo. Deja en None para desactivar auth.
 REQUIRED_TOKEN = None  # ej: "secreto-123"
 
+def _get_file_dirs(file_name: str):
+    """Crea directorios específicos para un archivo"""
+    safe_name = "".join(c for c in file_name if c.isalnum() or c in "._-")[:100]
+    print(f"Safe name: {safe_name}")
+    file_tmp_dir = TMP_DIR / safe_name
+    file_blocks_dir = BLOCKS_DIR / safe_name
+    file_tmp_dir.mkdir(parents=True, exist_ok=True)
+    file_blocks_dir.mkdir(parents=True, exist_ok=True)
+    return file_tmp_dir, file_blocks_dir
+
 def _ensure_dirs():
     TMP_DIR.mkdir(parents=True, exist_ok=True)
     BLOCKS_DIR.mkdir(parents=True, exist_ok=True)
@@ -64,9 +74,13 @@ class DataNodeServicer(pb_grpc.DataNodeServicer):
                         context.abort(grpc.StatusCode.ALREADY_EXISTS, "este chunk ya se inicio")
                     if not msg.start.block_id:
                         context.abort(grpc.StatusCode.INVALID_ARGUMENT, "block_id required")
-
+                    
                     block_id = msg.start.block_id
-                    tmp_path = TMP_DIR / f"{block_id}.part"
+                    file_name = msg.start.file_name
+                    print(f"File name: {file_name}")
+                    file_tmp_dir, file_blocks_dir = _get_file_dirs(file_name)
+                    print(f"[DataNode] 📂 Directorios creados: {file_tmp_dir}, {file_blocks_dir}")
+                    tmp_path = file_tmp_dir / f"{block_id}.part"
                     # Abre el archivo temporal para este bloque (overwrite)
                     out = tmp_path.open("wb")
                     started = True
@@ -120,7 +134,7 @@ class DataNodeServicer(pb_grpc.DataNodeServicer):
                             )
 
                     # Finaliza (rename atómico)
-                    final_path = BLOCKS_DIR / f"{block_id}.blk"
+                    final_path = file_blocks_dir / f"{block_id}.blk"
                     if msg.commit.finalize:
                         os.replace(tmp_path, final_path)  # atómico en mismo FS
                         print(f"[DataNode] 💾 BLOQUE GUARDADO: {block_id} ({written} bytes) → {final_path}")
