@@ -20,7 +20,7 @@ REQUIRED_TOKEN = None  # ej: "secreto-123"
 
 def _get_file_dirs(file_name: str):
     """Crea directorios específicos para un archivo"""
-    safe_name = "".join(c for c in file_name if c.isalnum() or c in "._-")[:100]
+    safe_name = file_name
     print(f"Safe name: {safe_name}")
     file_tmp_dir = TMP_DIR / safe_name
     file_blocks_dir = BLOCKS_DIR / safe_name

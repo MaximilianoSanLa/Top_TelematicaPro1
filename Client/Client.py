@@ -120,7 +120,7 @@ def put_file_with_local_blocks(file_path: str, remote_path: str, namenode_addr: 
     manifest = json.loads(Path(manifest_path).read_text(encoding='utf-8'))#Contiene la informacion de los bloques 
 
     # ✅ AGREGAR ESTA LÍNEA
-    file_name = Path(file_path).name
+    file_name = remote_path
 
     # Validación simple
     if len(manifest["blocks"]) != num_blocks_plan:
@@ -382,7 +382,7 @@ if __name__ == "__main__":
             print("🔼 Modo SUBIDA")
             mf = put_file_with_local_blocks(
                 file_path="c:/Users/maxim/Downloads/grpc/Top_TelematicaPro1/Client/Archivo128MB.txt",
-                remote_path=eleciones[1],
+                remote_path=fileAndKey,
                 # namenode_addr="localhost:50051",
                 namenode_addr="44.217.41.36:50051",
                 auth_token=None  # o tu token
