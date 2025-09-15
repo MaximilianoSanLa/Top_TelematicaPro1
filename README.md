@@ -135,7 +135,7 @@ El DataNode muestra progreso detallado:
 
 El código es **completamente multiplataforma** gracias a:
 
-- **`pathlib.Path`**: Maneja automáticamente diferencias de rutas (`\` vs `/`)
+- **`pathlib.Path`**: Maneja automáticamente diferencias de rutas (posición relativa (filePathAfterProgram/fileName) o total desde home (/filePath/fileName); vs total desde el disco (C:/filePath/fileName))
 - **Librerías estándar**: `grpc`, `hashlib`, `socket` funcionan idénticamente
 - **Operaciones atómicas**: `os.replace()` es multiplataforma
 
