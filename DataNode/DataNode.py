@@ -32,23 +32,23 @@ def _ensure_dirs():
     TMP_DIR.mkdir(parents=True, exist_ok=True)
     BLOCKS_DIR.mkdir(parents=True, exist_ok=True)
 
-def _extract_bearer_token(context) -> str | None:
-    """Lee 'authorization: Bearer <token>' de metadata (si llega)."""
-    md = dict(context.invocation_metadata())
-    auth = md.get("authorization")
-    if not auth:
-        return None
-    if auth.lower().startswith("bearer "):
-        auth = auth.split(" ", 1)
-        return auth[1]
-    return auth
+# def _extract_bearer_token(context) -> str | None:
+#     """Lee 'authorization: Bearer <token>' de metadata (si llega)."""
+#     md = dict(context.invocation_metadata())
+#     auth = md.get("authorization")
+#     if not auth:
+#         return None
+#     if auth.lower().startswith("bearer "):
+#         auth = auth.split(" ", 1)
+#         return auth[1]
+#     return auth
 
-def _check_auth(context):
-    if REQUIRED_TOKEN is None:
-        return
-    tok = _extract_bearer_token(context)
-    if tok != REQUIRED_TOKEN:
-        context.abort(grpc.StatusCode.UNAUTHENTICATED, "Invalid token")
+# def _check_auth(context):
+#     if REQUIRED_TOKEN is None:
+#         return
+#     tok = _extract_bearer_token(context)
+#     if tok != REQUIRED_TOKEN:
+#         context.abort(grpc.StatusCode.UNAUTHENTICATED, "Invalid token")
 
 # ===================== Servicer =====================
 class DataNodeServicer(pb_grpc.DataNodeServicer):
@@ -56,7 +56,7 @@ class DataNodeServicer(pb_grpc.DataNodeServicer):
         """
         Flujo: START (abre .part) -> CHUNK... -> COMMIT (verifica y renombra .part -> .blk).
         """
-        _check_auth(context)
+        #_check_auth(context)
         _ensure_dirs()
 
         started = False
@@ -161,7 +161,7 @@ class DataNodeServicer(pb_grpc.DataNodeServicer):
                 out.close()
 
     def DownloadBlock(self, request: pb.DownloadBlockRequest, context: grpc.ServicerContext):
-        _check_auth(context)
+        #_check_auth(context)
         _ensure_dirs()
 
         block_id = request.block_id
@@ -205,7 +205,7 @@ class DataNodeServicer(pb_grpc.DataNodeServicer):
         print(f"[DataNode] ✅ ENVÍO COMPLETADO: Bloque {block_id} enviado exitosamente ({sent_bytes} bytes)")
 
     def DeleteBlock(self, request, context):
-        _check_auth(context)
+        #_check_auth(context)
         _ensure_dirs()
 
         block_id = request.block_id

@@ -280,7 +280,7 @@ if __name__ == "__main__":
             }
             response = requests.post(f"{BASE_URL}/login", json=payload)
         elecion= input("Utilize nuestra api: get 'Archivo', put 'Archivo', ls, mkdir 'Nombre',rm 'Archivo' ")
-        eleciones = elecion.split(" ")
+        eleciones = elecion.split()
         authKey = response.json()["authKey"]
         print("🔑 AuthKey:", authKey)
         cmd_payload = {
@@ -377,9 +377,11 @@ if __name__ == "__main__":
         elif eleciones[0]=="put":
             # Modo subida (por defecto)
             fileAndKey= authKey+"/"+eleciones[1]
+            print(fileAndKey)
+            print(eleciones)
             print("🔼 Modo SUBIDA")
             mf = put_file_with_local_blocks(
-                file_path=eleciones[1],
+                file_path="c:/Users/maxim/Downloads/grpc/Top_TelematicaPro1/Client/Archivo128MB.txt",
                 remote_path=eleciones[1],
                 # namenode_addr="localhost:50051",
                 namenode_addr="44.217.41.36:50051",
