@@ -260,14 +260,14 @@ if __name__ == "__main__":
                 "username": user,
                 "password": contrasena
             }
-           # response = requests.post(f"{BASE_URL}/login", json=payload)
-            #if response.status_code == 200:
-             #   data = response.json()
-              #  print("Login successful!")
-               # print("Auth Key:", data["authKey"])
-            #else:
-             #   print("Login failed:", response.status_code, response.text)
-               # break 
+            response = requests.post(f"{BASE_URL}/login", json=payload)
+            if response.status_code == 200:
+               data = response.json()
+               print("Login successful!")
+               print("Auth Key:", data["authKey"])
+            else:
+               print("Login failed:", response.status_code, response.text)
+               break 
         else:
             print("Ingresa Usuario: ")
             user= input()
@@ -281,12 +281,12 @@ if __name__ == "__main__":
             response = requests.post(f"{BASE_URL}/login", json=payload)
         elecion= input("Utilize nuestra api: get 'Archivo', put 'Archivo', ls, mkdir 'Nombre',rm 'Archivo' ")
         eleciones = elecion.split(" ")
-        #authKey = response.json()["authKey"]
-        #print("🔑 AuthKey:", authKey)
-        #cmd_payload = {
-           # "authKey": authKey,
-            #"cmd": "ls"   # list files
-        #}
+        authKey = response.json()["authKey"]
+        print("🔑 AuthKey:", authKey)
+        cmd_payload = {
+           "authKey": authKey,
+            "cmd": "ls"   # list files
+        }
 
         print(eleciones[0])
         if eleciones[0] == "get":
@@ -313,8 +313,8 @@ if __name__ == "__main__":
                 cmd_res = requests.post(f"{BASE_URL}/command", json=cmd_payload)
 
                 results = data.get("results", [])
-                dataNodes = ["localhost:5002", "localhost:5002", "localhost:5002"]
-                #dataNodes = [f"{r['worker']}:5002" for r in results if "worker" in r]
+                #dataNodes = ["localhost:5002", "localhost:5002", "localhost:5002"]
+                dataNodes = [f"{r['worker']}:5002" for r in results if "worker" in r]
 
                 # Remove duplicates
                 dataNodes = list(set(dataNodes))
@@ -376,12 +376,13 @@ if __name__ == "__main__":
 
         elif eleciones[0]=="put":
             # Modo subida (por defecto)
+            fileAndKey= authKey+"/"+eleciones[1]
             print("🔼 Modo SUBIDA")
             mf = put_file_with_local_blocks(
                 file_path=eleciones[1],
-                remote_path="Archivo128MB.txt",
-                namenode_addr="localhost:50051",
-                #namenode_addr="44.217.41.36:50051",
+                remote_path=eleciones[1],
+                # namenode_addr="localhost:50051",
+                namenode_addr="44.217.41.36:50051",
                 auth_token=None  # o tu token
             )
             print(json.dumps(mf, indent=2))

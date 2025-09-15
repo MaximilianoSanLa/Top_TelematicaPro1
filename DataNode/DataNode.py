@@ -10,9 +10,9 @@ import data_node_pb2 as pb
 import data_node_pb2_grpc as pb_grpc
 
 # ===================== Configuración =====================
-ROOT_DIR   = Path("data")
+ROOT_DIR   = Path("/home/ec2-user/worker_data")
 TMP_DIR    = ROOT_DIR / "tmp"#directorio temporal
-BLOCKS_DIR = ROOT_DIR / "blocks"#directorio de bloques
+BLOCKS_DIR = ROOT_DIR #directorio de bloques
 READ_CHUNK = 1 * 1024 * 1024  # 1 MB para servir descargas
 
 # Opcional: token mínimo. Deja en None para desactivar auth.
