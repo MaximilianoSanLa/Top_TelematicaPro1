@@ -290,7 +290,7 @@ if __name__ == "__main__":
         print(eleciones[0])
         if eleciones[0] == "get":
             # Modo descarga
-            print("🔽 Modo DESCARGA")
+            print("Modo DESCARGA")
 
             # Ejemplo: python Client.py download Archivo128MBOut/manifest.json archivo_descargado.txt
             # if len(sys.argv) >= 4:
@@ -320,12 +320,14 @@ if __name__ == "__main__":
                 # Remove duplicates
                 dataNodes = list(set(dataNodes))
                 print(dataNodes)
+                print("ok")
                 # Lista de DataNodes disponibles
                 output = cmd_data["results"][0]["output"]   # grab the output string
                 print(output)
                 target_dir = f"./{eleciones[1]}:"
-                directories = {}
+                target_dir = eleciones[1]   # or eleciones[1]
                 grouped_ids = {}
+
                 for result in cmd_data.get("results", []):
                     worker = result.get("worker")
                     output = result.get("output", "")
@@ -334,20 +336,20 @@ if __name__ == "__main__":
                     for line in output.splitlines():
                         if not line.strip():
                             continue
-                        if line.endswith(":"):  # directory line
-                            current_dir = line.rstrip(":")
-                            current_dir = os.path.basename(current_dir)  # normalize ./Archivo128MB.txt -> Archivo128MB.txt
+                        
+                        if line.endswith(":"):  # directory line like "./Archivo128MB.txt:"
+                            # normalize dir name -> Archivo128MB.txt
+                            current_dir = os.path.basename(line.rstrip(":"))
                         else:  # file line
-                            if current_dir == target_dir:
+                            # ✅ only if we're inside the correct dir & it's a .blk file
+                            if current_dir == target_dir and line.endswith(".blk"):
                                 clean_id = line.strip().removesuffix(".blk")
                                 grouped_ids.setdefault(worker, []).append(clean_id)
 
                 print("Grouped IDs by worker:")
-                print(grouped_ids)
                 for worker, ids in grouped_ids.items():
                     print(f" {worker}: {ids}")
 
-                
                 downloaded_blocks = []
 
 
@@ -366,7 +368,7 @@ if __name__ == "__main__":
                         print(fileAndKey)
                         # Seleccionar DataNode (por ahora usar el índice para rotar entre DataNodes)
                         datanode_idx = block_index % len(dataNodes)
-                        dn_addr = worker
+                        dn_addr = worker+":5002"
 
                         # Crear archivo .block individual
                         block_filename = f"block_{block_index:06d}_{block_id[:8]}.block"
