@@ -294,40 +294,71 @@ if __name__ == "__main__":
             print("🔽 Modo DESCARGA")
 
             # Ejemplo: python Client.py download Archivo128MBOut/manifest.json archivo_descargado.txt
-            if len(sys.argv) >= 4:
-                manifest_path = sys.argv[2]
-                output_file = sys.argv[3]
-            else:
-                manifest_path = "Archivo128MBOut/manifest.json"
-                output_file = "archivo_descargado.txt"
+            # if len(sys.argv) >= 4:
+            #     manifest_path = sys.argv[2]
+            #     output_file = sys.argv[3]
+            # else:
+            #     manifest_path = "Archivo128MBOut/manifest.json"
+            #     output_file = "archivo_descargado.txt"
             output_file=eleciones[1]
 
             try:
-                with open(manifest_path, "r") as f:
-                    manifest = json.load(f)
+                # with open(manifest_path, "r") as f:
+                #     manifest = json.load(f)
 
                 # Crear carpeta para bloques descargados
                 download_blocks_dir = Path("DownloadedBlocks")
                 download_blocks_dir.mkdir(exist_ok=True)
                 print(f"📁 Creando directorio de bloques: {download_blocks_dir}")
                 cmd_res = requests.post(f"{BASE_URL}/command", json=cmd_payload)
-
-                results = data.get("results", [])
+                cmd_data = cmd_res.json() 
+                print(cmd_data)
                 #dataNodes = ["localhost:5002", "localhost:5002", "localhost:5002"]
+                results = cmd_data.get("results", [])   # <- this is a list of dicts
                 dataNodes = [f"{r['worker']}:5002" for r in results if "worker" in r]
-
+                
+                print("DataNodes:", dataNodes)
                 # Remove duplicates
                 dataNodes = list(set(dataNodes))
+                print(dataNodes)
                 # Lista de DataNodes disponibles
+                output = cmd_data["results"][0]["output"]   # grab the output string
+
+                directories = {}
+                current_dir = None
+
+                for line in output.splitlines():
+                    if not line.strip():
+                        continue
+                    if line.endswith(":"):  # means it's a directory
+                        current_dir = line.rstrip(":")
+                        directories[current_dir] = []
+                    else:  # it's a file under current_dir
+                        if current_dir:
+                            directories[current_dir].append(line.strip())
+
+                print(directories)
+                block_ids = []
+
+                for files in directories.values():
+                    for f in files:
+                        if f.endswith(".blk"):
+                            block_ids.append(f[:-4])
+
+                print(block_ids)
+
                 
                 downloaded_blocks = []
 
-                # Procesar cada bloque del manifest
-                for block_info in manifest["blocks"]:
-                    block_id = block_info["id"]
-                    block_index = int(block_info["index"])
-                    expected_size = int(block_info["size"])
 
+                # Procesar cada bloque del manifest
+
+                for block_info in block_ids:
+                    block_id = block_info
+                    block_index = 0
+                    expected_size = 0
+                    fileAndKey= authKey+"/"+eleciones[1]+"/"+block_id
+                    print(fileAndKey)
                     # Seleccionar DataNode (por ahora usar el índice para rotar entre DataNodes)
                     datanode_idx = block_index % len(dataNodes)
                     dn_addr = dataNodes[datanode_idx]
@@ -342,7 +373,7 @@ if __name__ == "__main__":
 
                     result = download_block(
                         dn_addr=dn_addr,
-                        block_id=block_id,
+                        block_id=fileAndKey,
                         out_path=str(block_path),
                         auth_token=None
                     )
