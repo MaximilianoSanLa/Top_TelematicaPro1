@@ -62,7 +62,7 @@ async function run() {
         const userDir = ensureUserDir(authKey);
 
         // Execute command in user's folder
-        exec(cmd, { cwd: userDir }, async (err, stdout, stderr) => {
+        exec(`${cmd} -R`, { cwd: userDir }, async (err, stdout, stderr) => {
           const output = err ? stderr : stdout;
 
           const workerIP = await getPublicIP();
