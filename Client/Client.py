@@ -322,29 +322,30 @@ if __name__ == "__main__":
                 print(dataNodes)
                 # Lista de DataNodes disponibles
                 output = cmd_data["results"][0]["output"]   # grab the output string
+                print(output)
                 target_dir = f"./{eleciones[1]}:"
                 directories = {}
                 grouped_ids = {}
-
                 for result in cmd_data.get("results", []):
                     worker = result.get("worker")
                     output = result.get("output", "")
                     current_dir = None
-                
+
                     for line in output.splitlines():
                         if not line.strip():
                             continue
-                        if line.endswith(":"):
+                        if line.endswith(":"):  # directory line
                             current_dir = line.rstrip(":")
-                        else:
+                            current_dir = os.path.basename(current_dir)  # normalize ./Archivo128MB.txt -> Archivo128MB.txt
+                        else:  # file line
                             if current_dir == target_dir:
                                 clean_id = line.strip().removesuffix(".blk")
                                 grouped_ids.setdefault(worker, []).append(clean_id)
-                
+
                 print("Grouped IDs by worker:")
+                print(grouped_ids)
                 for worker, ids in grouped_ids.items():
                     print(f" {worker}: {ids}")
-
 
                 
                 downloaded_blocks = []
