@@ -323,29 +323,23 @@ if __name__ == "__main__":
                 print(dataNodes)
                 # Lista de DataNodes disponibles
                 output = cmd_data["results"][0]["output"]   # grab the output string
-
+                target_dir = f"./{eleciones[1]}:"
                 directories = {}
+                ids = []
                 current_dir = None
 
                 for line in output.splitlines():
                     if not line.strip():
                         continue
-                    if line.endswith(":"):  # means it's a directory
+                    if line.endswith(":"):  # directory marker
                         current_dir = line.rstrip(":")
-                        directories[current_dir] = []
-                    else:  # it's a file under current_dir
-                        if current_dir:
-                            directories[current_dir].append(line.strip())
+                    else:
+                        if current_dir == f"./{eleciones[1]}":  # only collect inside this dir
+                            clean_id = line.strip().removesuffix(".blk")
+                            ids.append(clean_id)
 
-                print(directories)
-                block_ids = []
+                print("IDs:", ids)
 
-                for files in directories.values():
-                    for f in files:
-                        if f.endswith(".blk"):
-                            block_ids.append(f[:-4])
-
-                print(block_ids)
 
                 
                 downloaded_blocks = []
@@ -353,7 +347,7 @@ if __name__ == "__main__":
 
                 # Procesar cada bloque del manifest
 
-                for block_info in block_ids:
+                for block_info in ids:
                     block_id = block_info
                     block_index = 0
                     expected_size = 0
