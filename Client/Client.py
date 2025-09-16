@@ -16,7 +16,6 @@ import data_node_pb2_grpc as dnpb_grpc
 
 CHUNK_SIZE = 1 * 1024 * 1024  # 1 MB
 
-
 def plan_write(namenode_addr: str, file_path: str)->pb.PlanFileWriteResponse:
     p = Path(file_path)
     if not p.exists():
@@ -148,7 +147,7 @@ def put_file_with_local_blocks(file_path: str, remote_path: str, namenode_addr: 
         print(f"DEBUG: dn_addr = '{dn_addr}', type = {type(dn_addr)}")
 
         print(f"⬆️  Subiendo bloque {order} ({size} B) → DN: {dn_addr}")
-        _upload_block_to_one_datanode(dn_addr, id, path, size, hash, file_name, auth_token)
+        _upload_block_to_one_datanode(dn_addr,str(num_blocks_plan)+"_"+str(order)+"_"+id, path, size, hash, file_name, auth_token)
 
         blocks_for_register.append({
             "order": order,
@@ -249,7 +248,7 @@ if __name__ == "__main__":
     import sys
     BASE_URL = "http://44.217.41.36:3000"
     while True:
-        print("Ingresa 1 para ingresar a tu cuenta.\n Ingresa 2 para crear cuenta")
+        print("Ingresa 1 para ingresar a tu cuenta.\nIngresa 2 para crear cuenta")
         
         if(input()=="1"):
             print("Ingresa Usuario: ")
@@ -325,20 +324,26 @@ if __name__ == "__main__":
                 output = cmd_data["results"][0]["output"]   # grab the output string
                 target_dir = f"./{eleciones[1]}:"
                 directories = {}
-                ids = []
-                current_dir = None
+                grouped_ids = {}
 
-                for line in output.splitlines():
-                    if not line.strip():
-                        continue
-                    if line.endswith(":"):  # directory marker
-                        current_dir = line.rstrip(":")
-                    else:
-                        if current_dir == f"./{eleciones[1]}":  # only collect inside this dir
-                            clean_id = line.strip().removesuffix(".blk")
-                            ids.append(clean_id)
-
-                print("IDs:", ids)
+                for result in cmd_data.get("results", []):
+                    worker = result.get("worker")
+                    output = result.get("output", "")
+                    current_dir = None
+                
+                    for line in output.splitlines():
+                        if not line.strip():
+                            continue
+                        if line.endswith(":"):
+                            current_dir = line.rstrip(":")
+                        else:
+                            if current_dir == target_dir:
+                                clean_id = line.strip().removesuffix(".blk")
+                                grouped_ids.setdefault(worker, []).append(clean_id)
+                
+                print("Grouped IDs by worker:")
+                for worker, ids in grouped_ids.items():
+                    print(f" {worker}: {ids}")
 
 
                 
@@ -346,56 +351,71 @@ if __name__ == "__main__":
 
 
                 # Procesar cada bloque del manifest
+                contador_bloques=0
+                num_blocks_plan=0
+                for worker, ids in grouped_ids.items():
+                    for block_info in ids:
+                        block_id = block_info
+                        print(block_id)
+                        print(type(block_id))
+                        block_index = int(str(block_info).split("_")[1])
+                        num_blocks_plan = int(str(block_info).split("_")[0])
+                        expected_size = 0
+                        fileAndKey= authKey+"/"+eleciones[1]+"/"+block_id
+                        print(fileAndKey)
+                        # Seleccionar DataNode (por ahora usar el índice para rotar entre DataNodes)
+                        datanode_idx = block_index % len(dataNodes)
+                        dn_addr = worker
 
-                for block_info in ids:
-                    block_id = block_info
-                    block_index = 0
-                    expected_size = 0
-                    fileAndKey= authKey+"/"+eleciones[1]+"/"+block_id
-                    print(fileAndKey)
-                    # Seleccionar DataNode (por ahora usar el índice para rotar entre DataNodes)
-                    datanode_idx = block_index % len(dataNodes)
-                    dn_addr = dataNodes[datanode_idx]
+                        # Crear archivo .block individual
+                        block_filename = f"block_{block_index:06d}_{block_id[:8]}.block"
+                        block_path = download_blocks_dir / block_filename
 
-                    # Crear archivo .block individual
-                    block_filename = f"block_{block_index:06d}_{block_id[:8]}.block"
-                    block_path = download_blocks_dir / block_filename
+                        print(f"\n🔽 Descargando bloque {block_index} desde {dn_addr}")
+                        print(f"   📦 ID: {block_id}")
+                        print(f"   📏 Tamaño esperado: {expected_size} bytes")
 
-                    print(f"\n🔽 Descargando bloque {block_index} desde {dn_addr}")
-                    print(f"   📦 ID: {block_id}")
-                    print(f"   📏 Tamaño esperado: {expected_size} bytes")
+                        result = download_block(
+                            dn_addr=dn_addr,
+                            block_id=fileAndKey,
+                            out_path=str(block_path),
+                            auth_token=None
+                        )
 
-                    result = download_block(
-                        dn_addr=dn_addr,
-                        block_id=fileAndKey,
-                        out_path=str(block_path),
-                        auth_token=None
-                    )
+                        # # Verificar tamaño descargado
+                        # if result != expected_size:
+                        #     print(f"⚠️ Advertencia: Tamaño descargado {result} != esperado {expected_size}")
 
-                    # Verificar tamaño descargado
-                    if result != expected_size:
-                        print(f"⚠️ Advertencia: Tamaño descargado {result} != esperado {expected_size}")
+                        downloaded_blocks.append((block_index, block_path, result))
+                        print(f"✅ Bloque guardado: {block_path} ({result} bytes)")
+                        contador_bloques+=1
+                if(contador_bloques==num_blocks_plan):
+                    
 
-                    downloaded_blocks.append((block_index, block_path, result))
-                    print(f"✅ Bloque guardado: {block_path} ({result} bytes)")
+                    # Crear archivo final concatenado
+                    print(f"\n🔗 Concatenando bloques en archivo final: {output_file}")
+                    with open(output_file, "wb") as final_file:
+                        total_bytes = 0
+                        for block_index, block_path, size in sorted(downloaded_blocks):
+                            with open(block_path, "rb") as block_file:
+                                data = block_file.read()
+                                final_file.write(data)
+                                total_bytes += len(data)
+                                print(f"✅ Bloque {block_index} concatenado: {len(data)} bytes")
 
-                # Crear archivo final concatenado
-                print(f"\n🔗 Concatenando bloques en archivo final: {output_file}")
-                with open(output_file, "wb") as final_file:
-                    total_bytes = 0
+                    print(f"\n🎉 Descarga completada:")
+                    print(f"   📄 Archivo final: {output_file} ({total_bytes} bytes)")
+                    print(f"   📁 Bloques individuales en: {download_blocks_dir}/")
                     for block_index, block_path, size in sorted(downloaded_blocks):
-                        with open(block_path, "rb") as block_file:
-                            data = block_file.read()
-                            final_file.write(data)
-                            total_bytes += len(data)
-                            print(f"✅ Bloque {block_index} concatenado: {len(data)} bytes")
-
-                print(f"\n🎉 Descarga completada:")
-                print(f"   📄 Archivo final: {output_file} ({total_bytes} bytes)")
-                print(f"   📁 Bloques individuales en: {download_blocks_dir}/")
-                for block_index, block_path, size in sorted(downloaded_blocks):
-                    print(f"      📦 {block_path.name} ({size} bytes)")
-
+                        print(f"      📦 {block_path.name} ({size} bytes)")
+                else:
+                    i=0
+                    blockeslegaron=[]
+                    for block_index in sorted(downloaded_blocks):
+                        blockeslegaron.append(block_index[0])
+                    for i in range(num_blocks_plan):
+                        if i not in blockeslegaron:
+                            print("No llego el bloque: "+str(i))
             except Exception as e:
                 print(f"❌ Error en descarga: {e}")
 
