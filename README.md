@@ -145,16 +145,6 @@ Notas:
   - `Client/<NombreArchivo>Out/manifest.json` metadatos locales.
   - `Client/DownloadedBlocks/`                bloques descargados.
 
-## Pruebas rápidas
-- Subida:
-  1) Inicia NameNode y DataNodes.
-  2) Ejecuta `put Archivo128MB.txt`.
-  3) Verifica `DataNode/data/blocks/Archivo128MB.txt/*.blk`.
-- Descarga:
-  1) Ejecuta `get Archivo128MB.txt`.
-  2) Verifica `Client/DownloadedBlocks/` y el archivo final.
-  3) Compara tamaño con el original.
-
 ## Solución de problemas
 - No descarga bloques, `grouped_ids` vacío:
   - Normaliza directorios en el cliente: compara `current_dir.removeprefix("./")` con `target_dir.removeprefix("./")` y elimina `:` finales.
@@ -163,10 +153,3 @@ Notas:
 - Bloques incompletos:
   - Revisa que el stream haga `commit(finalize=true)` y que `ChunkSize` sea coherente.
 
-## Limitaciones actuales
-- Replicación efectiva R=1.
-- Descubrimiento de bloques en GET depende del `node-api`/`node-worker` y del formato de `ls`.
-- Checksums por bloque modelados en proto, pero verificación en descarga puede activarse/mejorarse.
-
-## Licencia
-Indica aquí la licencia del proyecto si aplica.
