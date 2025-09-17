@@ -1,205 +1,172 @@
-# Sistema de Archivos Distribuido (DFS)
+## GridDFS — Sistema de Archivos Distribuido (DFS)
 
-Un sistema de archivos distribuido implementado en Python usando gRPC, inspirado en HDFS. Permite almacenar archivos grandes dividiéndolos en bloques y distribuyéndolos entre múltiples DataNodes.
+## Descripción
+Sistema de archivos distribuido estilo HDFS con separación de metadatos y datos:
+- NameNode: planifica la escritura (tamaño de bloque, número de bloques, distribución).
+- DataNode(s): almacenan y sirven bloques.
+- Cliente: sube/descarga archivos mediante gRPC streaming.
+- API Node opcional: facilita listados remotos para el modo descarga.
 
-## 🏗️ Arquitectura
+## Requisitos
+- Python 3.10+
+- Node.js 18+ (solo si usas `node-api`/`node-worker`)
+- pip y virtualenv recomendados
 
-```
-Cliente ──→ NameNode (puerto 50051) ──→ Plan de distribución
-   ↓
-DataNodes (puerto 5002+) ──→ Almacenamiento de bloques
-```
+Paquetes Python:
+- grpcio
+- grpcio-tools
+- protobuf
+- requests
 
-### Componentes:
-
-- **NameNode**: Coordinador central que maneja metadatos y asignación de bloques
-- **DataNode**: Nodos de almacenamiento que guardan los bloques físicos
-- **Cliente**: Interfaz para subir archivos al sistema distribuido
-
-## 🚀 Instalación
-
-### Dependencias
-
+Instalación rápida:
 ```bash
-pip install grpcio grpcio-tools pathlib
+python -m venv .venv
+. .venv/Scripts/activate    # Windows PowerShell
+# source .venv/bin/activate # Linux/macOS
+pip install grpcio grpcio-tools protobuf requests
 ```
 
-### Generación de archivos protobuf (si es necesario)
-
-```bash
-# Para NameNode
-python -m grpc_tools.protoc --python_out=. --grpc_python_out=. name_node.proto
-
-# Para DataNode
-python -m grpc_tools.protoc --python_out=. --grpc_python_out=. data_node.proto
-```
-
-## ▶️ Ejecución
-
-### Orden de inicio (IMPORTANTE):
-
-#### 1. Iniciar NameNode
-```bash
-cd NameNode
-python NameNode.py
-```
-**Salida esperada:**
-```
-NameNode gRPC escuchando en :50051
-```
-
-#### 2. Iniciar DataNode(s)
-```bash
-cd DataNode
-python DataNode.py
-```
-**Salida esperada:**
-```
-DataNode gRPC escuchando en :5002
-```
-
-#### 3. Ejecutar Cliente
-```bash
-cd Client
-python Client.py
-```
-
-## 📁 Estructura del Proyecto
-
-```
+## Estructura del proyecto
+```text
 Top_TelematicaPro1/
-├── NameNode/
-│   ├── NameNode.py           # Servidor coordinador
-│   ├── name_node.proto       # Definición gRPC
-│   └── name_node_pb2*.py     # Archivos generados
-├── DataNode/
-│   ├── DataNode.py           # Servidor de almacenamiento
-│   ├── data_node.proto       # Definición gRPC
-│   ├── data_node_pb2*.py     # Archivos generados
-│   └── data/                 # Directorio de bloques
-│       ├── tmp/              # Archivos temporales
-│       └── blocks/           # Bloques finalizados (.blk)
-├── Client/
-│   ├── Client.py             # Cliente principal
-│   ├── utilsClient.py        # Utilidades del cliente
-│   ├── generadorArchivo.py   # Generador de archivos de prueba
-│   └── Archivo128MBOut/      # Directorio de bloques locales
-└── README.md
+  Client/
+    Client.py
+    utilsClient.py
+    data_node.proto
+    name_node.proto
+    Archivo128MB.txt
+    Archivo128MBOut/
+      blocks/
+      manifest.json
+      temp/
+    DownloadedBlocks/          # se crea en tiempo de ejecución
+  DataNode/
+    DataNode.py                # servidor DataNode gRPC
+    DataNode2.py, DataNode3.py # variantes opcionales
+    data/
+      blocks/<archivo>/*.blk   # almacenamiento final de bloques
+      tmp/<archivo>/           # temporales
+    data_node.proto
+  NameNode/
+    NameNode.py                # servidor NameNode gRPC
+  node-api/
+    api.js                     # API HTTP auxiliar (listados)
+  node-worker/
+    worker.js                  # agente que ejecuta "ls" en workers
+  config/
+    server-properties
+  README.md
 ```
 
-## ⚙️ Configuración
+## Configuración
+- NameNode:
+  - `NameNode/NameNode.py`
+    - `BLOCK_SIZE = 64 * 1024 * 1024` (64 MiB)
+    - `DATANODES = ["host1:5002", "host2:5002", ...]`  Ajusta a tus nodos reales.
+- DataNode:
+  - `DataNode/DataNode.py` escucha por defecto en `:5002`.
+  - Directorios de datos: `DataNode/data/blocks` y `DataNode/data/tmp`.
+- Puertos por defecto:
+  - NameNode: `50051`
+  - DataNode(s): `5002`
+- Replicación:
+  - El NameNode actual devuelve 1 dirección por bloque (R=1, round‑robin). Para R>1, extiende la lista `datanodes` por bloque en el NameNode y ajusta el cliente para subir a todas las réplicas.
 
-### NameNode (NameNode/NameNode.py)
-```python
-BLOCK_SIZE = 64 * 1024 * 1024    # 64 MB por bloque
-DATANODES = [                    # DataNodes disponibles
-    "localhost:5002",
-]
-```
-
-### DataNode (DataNode/DataNode.py)
-```python
-ROOT_DIR = Path("data")          # Directorio base
-TMP_DIR = ROOT_DIR / "tmp"       # Archivos temporales
-BLOCKS_DIR = ROOT_DIR / "blocks" # Bloques finalizados
-REQUIRED_TOKEN = None            # Token de autenticación (opcional)
-```
-
-### Cliente (Client/Client.py)
-```python
-CHUNK_SIZE = 1 * 1024 * 1024     # 1 MB por chunk de transferencia
-namenode_addr = "localhost:50051" # Dirección del NameNode
-```
-
-## 🔄 Flujo de Operación
-
-### Subida de Archivos:
-
-1. **Cliente → NameNode**: Solicita plan de escritura (`PlanFileWrite`)
-2. **NameNode → Cliente**: Devuelve plan con asignaciones de bloques
-3. **Cliente**: Divide archivo en bloques locales usando `utilsClient.py`
-4. **Cliente → DataNode**: Sube cada bloque usando streaming gRPC
-5. **DataNode**: Guarda bloques como archivos `.blk`
-
-### Mensajes de Confirmación:
-
-El DataNode muestra progreso detallado:
-```
-[DataNode] ✅ Iniciado recepción del bloque 00000000-12345...
-[DataNode] 📥 Recibido 10 MB del bloque 00000000-12345...
-[DataNode] 💾 BLOQUE GUARDADO: 00000000-12345... (67108864 bytes) → data/blocks/00000000-12345....blk
-[DataNode] ✅ CONFIRMACIÓN: Bloque 00000000-12345... procesado exitosamente
-```
-
-## 🐧 Compatibilidad Linux
-
-El código es **completamente multiplataforma** gracias a:
-
-- **`pathlib.Path`**: Maneja automáticamente diferencias de rutas (posición relativa (filePathAfterProgram/fileName) o total desde home (/filePath/fileName); vs total desde el disco (C:/filePath/fileName))
-- **Librerías estándar**: `grpc`, `hashlib`, `socket` funcionan idénticamente
-- **Operaciones atómicas**: `os.replace()` es multiplataforma
-
-### Ejecución en Linux:
-
+## Compilación de .proto (si necesitas regenerar stubs)
+Desde la raíz del repo:
 ```bash
-# Instalar dependencias
-pip3 install grpcio grpcio-tools
-
-# Ejecutar (usar python3 si es necesario)
-python3 NameNode.py
-python3 DataNode.py  
-python3 Client.py
+python -m grpc_tools.protoc -I Client --python_out=Client --grpc_python_out=Client Client/name_node.proto
+python -m grpc_tools.protoc -I Client --python_out=Client --grpc_python_out=Client Client/data_node.proto
+python -m grpc_tools.protoc -I DataNode --python_out=DataNode --grpc_python_out=DataNode DataNode/data_node.proto
 ```
 
-## 🔧 Puertos Utilizados
+## Ejecución
 
-| Servicio | Puerto | Descripción |
-|----------|--------|-------------|
-| NameNode | 50051  | Coordinación y metadatos |
-| DataNode | 5002   | Almacenamiento de bloques |
+### 1) Iniciar NameNode
+```bash
+python NameNode/NameNode.py
+```
+- Escucha en `:50051`.
 
-> **Nota**: Los puertos > 1024 no requieren privilegios especiales en Linux.
+### 2) Iniciar DataNode(s)
+En cada máquina/worker donde guardarás bloques:
+```bash
+python DataNode/DataNode.py
+```
+- Abre el puerto `5002` en firewall.
+- Verifica que `NameNode/NameNode.py` tenga sus direcciones reales en `DATANODES`.
 
-## 📊 Ejemplo de Uso
-
-```python
-# El cliente automáticamente:
-mf = put_file_with_local_blocks(
-    file_path="Archivo128MB.txt",           # Archivo a subir
-    remote_path="/users/camilo/Archivo128MB.txt", # Ruta remota
-    namenode_addr="localhost:50051",        # NameNode
-    auth_token=None                         # Sin autenticación
-)
+### 3) (Opcional) API Node y Worker
+```bash
+cd node-worker && npm install && node worker.js
+cd ../node-api && npm install && node api.js
 ```
 
-## 🛠️ Resolución de Problemas
+### 4) Cliente
+Comandos disponibles en `Client/Client.py`: `put <archivo>`, `get <archivo>`, `ls`.
 
-### Error: "DNS resolution failed for l"
-**Causa**: Problema en configuración de DataNodes en NameNode
-**Solución**: Verificar que `DATANODES` sea una lista de strings, no caracteres
+Ejemplos:
+```bash
+python Client/Client.py
+# En el menú interactivo:
+# put Archivo128MB.txt
+# get Archivo128MB.txt
+# ls
+```
 
-### Error: "Exception iterating requests"
-**Causa**: Problema en generador de requests del cliente
-**Solución**: Verificar que `block_path` sea objeto `Path`, no string
+Notas:
+- Subida (put): el cliente divide el archivo local en bloques de 64 MiB y los sube por streaming gRPC al DataNode asignado por el NameNode.
+- Descarga (get): el cliente consulta los workers mediante la API HTTP para encontrar `*.blk` del archivo, descarga cada bloque y concatena en el archivo final.
+- Los bloques descargados se guardan en `Client/DownloadedBlocks/` y luego se integran respetando `block_index`.
 
-### Error: "Connection refused"
-**Causa**: Servicios no están corriendo
-**Solución**: Verificar orden de inicio (NameNode → DataNode → Cliente)
+## Lógica de partición (resumen)
+- Tamaño de bloque: `BLOCK_SIZE = 64 * 1024 * 1024`.
+- Bucle:
+  - `SizeBloque = min(ArchivoFaltante, BLOCK_SIZE)`.
+  - Leer en trozos de `ChunkSize = 1 MiB` hasta completar `SizeBloque`.
+  - Actualizar `ArchivoFaltante` y `block_index`.
+- Garantías:
+  - Bloques de tamaño fijo salvo el último (`≤ BLOCK_SIZE`).
+  - Suma de tamaños de bloques = tamaño del archivo original.
 
-## 📈 Características
+## Lógica de distribución (resumen)
+- NameNode (round‑robin, R=1):
+  - Para bloque `i`: `DATANODES[i % M]` donde `M = len(DATANODES)`.
+- Extensión a replicación R>1:
+  - Para bloque `i`: `R` nodos distintos `DATANODES[(i + k) % M]` para `k=0..R-1`.
+  - El cliente debe subir a todas las réplicas y manejar confirmaciones/reintentos.
 
-- ✅ **Distribución automática** de bloques
-- ✅ **Streaming gRPC** para transferencias eficientes  
-- ✅ **Verificación de integridad** con SHA256
-- ✅ **Operaciones atómicas** para consistencia
-- ✅ **Multiplataforma** (Windows/Linux)
-- ✅ **Escalable** (múltiples DataNodes)
-- ✅ **Logging detallado** para debugging
+## Estructura de almacenamiento
+- Servidor:
+  - `DataNode/data/blocks/<archivo>/*.blk`  bloques finales.
+  - `DataNode/data/tmp/<archivo>/`           temporales de escritura.
+- Cliente:
+  - `Client/<NombreArchivo>Out/blocks/*.bin`  bloques locales pre‑subida.
+  - `Client/<NombreArchivo>Out/manifest.json` metadatos locales.
+  - `Client/DownloadedBlocks/`                bloques descargados.
 
-## 🔮 Próximas Funcionalidades
+## Pruebas rápidas
+- Subida:
+  1) Inicia NameNode y DataNodes.
+  2) Ejecuta `put Archivo128MB.txt`.
+  3) Verifica `DataNode/data/blocks/Archivo128MB.txt/*.blk`.
+- Descarga:
+  1) Ejecuta `get Archivo128MB.txt`.
+  2) Verifica `Client/DownloadedBlocks/` y el archivo final.
+  3) Compara tamaño con el original.
 
-- [ ] **Descarga de archivos** (`DownloadBlock`)
-- [ ] **Replicación** de bloques entre DataNodes
-- [ ] **Tolerancia a fallos** y recuperación
-- [ ] **Balanceador de carga** automático
-- [ ] **Interfaz web** para administración
+## Solución de problemas
+- No descarga bloques, `grouped_ids` vacío:
+  - Normaliza directorios en el cliente: compara `current_dir.removeprefix("./")` con `target_dir.removeprefix("./")` y elimina `:` finales.
+- Conexión rechazada a DataNode:
+  - Usa siempre `host:5002`. Verifica firewall/puerto y reachability.
+- Bloques incompletos:
+  - Revisa que el stream haga `commit(finalize=true)` y que `ChunkSize` sea coherente.
+
+## Limitaciones actuales
+- Replicación efectiva R=1.
+- Descubrimiento de bloques en GET depende del `node-api`/`node-worker` y del formato de `ls`.
+- Checksums por bloque modelados en proto, pero verificación en descarga puede activarse/mejorarse.
+
+## Licencia
+Indica aquí la licencia del proyecto si aplica.
